@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>徐杨是个大美女</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: #12021a;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  #stage {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px 12px 80px;
+  }
+  .line {
+    font-size: 6.5vw;
+    font-weight: 700;
+    text-align: center;
+    padding: 10px 0;
+    letter-spacing: 2px;
+    animation: pop .5s ease-out;
+    background: linear-gradient(90deg, #ff5fa2, #ffd166, #5ff0d0, #a06bff, #ff5fa2);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: pop .5s ease-out, flow 3s linear infinite;
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: translateY(18px) scale(.85); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes flow {
+    to { background-position: -300% 0; }
+  }
+  #bar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(18,2,26,.85);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(255,255,255,.12);
+  }
+  button {
+    flex: 1;
+    padding: 14px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #ff5fa2, #a06bff);
+  }
+  button:active { transform: scale(.96); opacity: .85; }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="bar">
+    <button id="toggle">暂停</button>
+    <button id="clear">清屏</button>
+  </div>
+
+<script>
+  const TEXT = '徐杨是个大美女';
+  const stage = document.getElementById('stage');
+  const toggleBtn = document.getElementById('toggle');
+  let timer = null;
+
+  function addLine() {
+    const div = document.createElement('div');
+    div.className = 'line';
+    div.textContent = TEXT;
+    stage.appendChild(div);
+    // 限制节点数量，避免手机内存暴涨
+    while (stage.childElementCount > 80) stage.removeChild(stage.firstElementChild);
+    stage.scrollTop = stage.scrollHeight;
+  }
+
+  function start() {
+    if (timer) return;
+    timer = setInterval(addLine, 400);
+    toggleBtn.textContent = '暂停';
+  }
+  function stop() {
+    clearInterval(timer);
+    timer = null;
+    toggleBtn.textContent = '继续';
+  }
+
+  toggleBtn.onclick = () => timer ? stop() : start();
+  document.getElementById('clear').onclick = () => stage.innerHTML = '';
+
+  start();
+</script>
+</body>
+</html>
