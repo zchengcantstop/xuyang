@@ -3,56 +3,71 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>徐杨是个大美女</title>
+<title>徐杨是个大美女 · 贪吃蛇</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; overflow: hidden; }
   body {
     background: #12021a;
     font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #fff;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
   }
-  #stage {
-    flex: 1;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 16px 12px 80px;
-  }
-  .line {
-    font-size: 6.5vw;
-    font-weight: 700;
-    text-align: center;
+  #hud {
     padding: 10px 0;
+    font-size: 15px;
+    letter-spacing: 1px;
+    color: #ffd166;
+  }
+  #wrap { position: relative; }
+  canvas {
+    display: block;
+    border-radius: 14px;
+    background: #1c0629;
+    border: 1px solid rgba(255,255,255,.12);
+    touch-action: none;
+  }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 16px;
+    text-align: center;
+    background: rgba(18,2,26,.88);
+    border-radius: 14px;
+  }
+  #overlay.show { display: flex; }
+  #title {
+    font-size: 26px;
+    font-weight: 800;
     letter-spacing: 2px;
-    animation: pop .5s ease-out;
     background: linear-gradient(90deg, #ff5fa2, #ffd166, #5ff0d0, #a06bff, #ff5fa2);
     background-size: 300% 100%;
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    animation: pop .5s ease-out, flow 3s linear infinite;
+    animation: flow 3s linear infinite;
   }
-  @keyframes pop {
-    from { opacity: 0; transform: translateY(18px) scale(.85); }
-    to   { opacity: 1; transform: none; }
-  }
-  @keyframes flow {
-    to { background-position: -300% 0; }
-  }
+  @keyframes flow { to { background-position: -300% 0; } }
+  #sub { font-size: 14px; color: #cbb8d8; line-height: 1.6; }
   #bar {
-    position: fixed;
-    left: 0; right: 0; bottom: 0;
     display: flex;
     gap: 10px;
-    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
-    background: rgba(18,2,26,.85);
-    backdrop-filter: blur(8px);
-    border-top: 1px solid rgba(255,255,255,.12);
+    padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+    width: 100%;
+    max-width: 420px;
   }
   button {
     flex: 1;
-    padding: 14px 0;
+    padding: 13px 0;
     font-size: 16px;
     font-weight: 600;
     color: #fff;
@@ -64,31 +79,140 @@
 </style>
 </head>
 <body>
-  <div id="stage"></div>
+  <div id="hud">已吃 <span id="score">0</span> / 5 · 滑动或方向键控制</div>
+  <div id="wrap">
+    <canvas id="cv"></canvas>
+    <div id="overlay">
+      <div id="title"></div>
+      <div id="sub"></div>
+      <button id="again" style="max-width:180px">再来一局</button>
+    </div>
+  </div>
   <div id="bar">
     <button id="toggle">暂停</button>
-    <button id="clear">清屏</button>
+    <button id="restart">重开</button>
   </div>
 
 <script>
   const TEXT = '徐杨是个大美女';
-  const stage = document.getElementById('stage');
-  const toggleBtn = document.getElementById('toggle');
-  let timer = null;
+  const CHARS = TEXT.split('');
+  const GOAL = 5;
+  const COLS = 15, ROWS = 20;
 
-  function addLine() {
-    const div = document.createElement('div');
-    div.className = 'line';
-    div.textContent = TEXT;
-    stage.appendChild(div);
-    // 限制节点数量，避免手机内存暴涨
-    while (stage.childElementCount > 80) stage.removeChild(stage.firstElementChild);
-    stage.scrollTop = stage.scrollHeight;
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const overlay = document.getElementById('overlay');
+  const titleEl = document.getElementById('title');
+  const subEl = document.getElementById('sub');
+  const toggleBtn = document.getElementById('toggle');
+
+  let cell = 22;
+  function fit() {
+    const maxW = Math.min(window.innerWidth - 24, 420);
+    const maxH = window.innerHeight - 140;
+    cell = Math.max(12, Math.floor(Math.min(maxW / COLS, maxH / ROWS)));
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = COLS * cell * dpr;
+    cv.height = ROWS * cell * dpr;
+    cv.style.width = COLS * cell + 'px';
+    cv.style.height = ROWS * cell + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+
+  let snake, dir, nextDir, food, score, timer, over;
+
+  function spawnFood() {
+    const free = [];
+    for (let y = 0; y < ROWS; y++)
+      for (let x = 0; x < COLS; x++)
+        if (!snake.some(s => s.x === x && s.y === y)) free.push({ x, y });
+    const spot = free[Math.floor(Math.random() * free.length)];
+    food = { ...spot, char: CHARS[score % CHARS.length] };
+  }
+
+  function reset() {
+    snake = [{ x: 7, y: 12 }, { x: 7, y: 13 }, { x: 7, y: 14 }];
+    dir = { x: 0, y: -1 };
+    nextDir = dir;
+    score = 0;
+    over = false;
+    scoreEl.textContent = '0';
+    overlay.classList.remove('show');
+    spawnFood();
+    start();
+    draw();
+  }
+
+  function step() {
+    dir = nextDir;
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+    if (head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS ||
+        snake.some(s => s.x === head.x && s.y === head.y)) {
+      return finish(false);
+    }
+
+    snake.unshift(head);
+    if (head.x === food.x && head.y === food.y) {
+      score++;
+      scoreEl.textContent = score;
+      if (score >= GOAL) { draw(); return finish(true); }
+      spawnFood();
+    } else {
+      snake.pop();
+    }
+    draw();
+  }
+
+  function finish(win) {
+    over = true;
+    stop();
+    toggleBtn.textContent = '暂停';
+    titleEl.textContent = win ? TEXT : '撞到啦';
+    subEl.innerHTML = win
+      ? `集齐 ${GOAL} 个字，胜利结算！<br>${TEXT}！`
+      : `只吃到 ${score} 个，再试一次吧`;
+    overlay.classList.add('show');
+  }
+
+  function draw() {
+    const w = COLS * cell, h = ROWS * cell;
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(255,255,255,.05)';
+    ctx.lineWidth = 1;
+    for (let x = 1; x < COLS; x++) {
+      ctx.beginPath(); ctx.moveTo(x * cell, 0); ctx.lineTo(x * cell, h); ctx.stroke();
+    }
+    for (let y = 1; y < ROWS; y++) {
+      ctx.beginPath(); ctx.moveTo(0, y * cell); ctx.lineTo(w, y * cell); ctx.stroke();
+    }
+
+    if (food) {
+      ctx.font = `700 ${Math.floor(cell * 0.72)}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffd166';
+      ctx.fillText(food.char, food.x * cell + cell / 2, food.y * cell + cell / 2 + 1);
+    }
+
+    snake.forEach((s, i) => {
+      const t = i / Math.max(1, snake.length - 1);
+      ctx.fillStyle = i === 0 ? '#ff5fa2' : `rgba(160,107,255,${0.95 - t * 0.45})`;
+      const p = Math.max(1, Math.floor(cell * 0.08));
+      ctx.beginPath();
+      const r = Math.floor(cell * 0.28);
+      const x = s.x * cell + p, y = s.y * cell + p, sz = cell - p * 2;
+      ctx.roundRect ? ctx.roundRect(x, y, sz, sz, r) : ctx.rect(x, y, sz, sz);
+      ctx.fill();
+    });
   }
 
   function start() {
-    if (timer) return;
-    timer = setInterval(addLine, 400);
+    if (timer || over) return;
+    timer = setInterval(step, 160);
     toggleBtn.textContent = '暂停';
   }
   function stop() {
@@ -97,10 +221,41 @@
     toggleBtn.textContent = '继续';
   }
 
-  toggleBtn.onclick = () => timer ? stop() : start();
-  document.getElementById('clear').onclick = () => stage.innerHTML = '';
+  function turn(x, y) {
+    if (dir.x === -x && dir.y === -y) return;
+    if (dir.x === x && dir.y === y) return;
+    nextDir = { x, y };
+  }
 
-  start();
+  const KEYS = {
+    ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+    w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0]
+  };
+  window.addEventListener('keydown', e => {
+    const k = KEYS[e.key] || KEYS[e.key.toLowerCase?.()];
+    if (k) { e.preventDefault(); turn(k[0], k[1]); }
+    else if (e.key === ' ') { e.preventDefault(); timer ? stop() : start(); }
+  });
+
+  let sx = 0, sy = 0;
+  cv.addEventListener('touchstart', e => {
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+  }, { passive: true });
+  cv.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) < 18 && Math.abs(dy) < 18) return;
+    if (Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 1 : -1, 0);
+    else turn(0, dy > 0 ? 1 : -1);
+  }, { passive: true });
+
+  toggleBtn.onclick = () => { if (!over) timer ? stop() : start(); };
+  document.getElementById('restart').onclick = reset;
+  document.getElementById('again').onclick = reset;
+  window.addEventListener('resize', fit);
+
+  fit();
+  reset();
 </script>
 </body>
 </html>
