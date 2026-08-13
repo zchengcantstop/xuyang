@@ -61,10 +61,29 @@
   #bar {
     display: flex;
     gap: 10px;
-    padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+    padding: 10px 14px 0;
     width: 100%;
     max-width: 420px;
   }
+  #pad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 8px;
+    width: 100%;
+    max-width: 300px;
+    padding: 10px 14px calc(14px + env(safe-area-inset-bottom));
+  }
+  #pad button {
+    font-size: 22px;
+    padding: 16px 0;
+    background: linear-gradient(135deg, #3a1350, #23083a);
+    border: 1px solid rgba(255,255,255,.14);
+  }
+  #pad .up    { grid-column: 2; grid-row: 1; }
+  #pad .left  { grid-column: 1; grid-row: 2; }
+  #pad .down  { grid-column: 2; grid-row: 2; }
+  #pad .right { grid-column: 3; grid-row: 2; }
   button {
     flex: 1;
     padding: 13px 0;
@@ -79,7 +98,7 @@
 </style>
 </head>
 <body>
-  <div id="hud">已吃 <span id="score">0</span> / 5 · 滑动或方向键控制</div>
+  <div id="hud">徐杨 + <span id="score">0</span> / 5 字 · 吃齐「是个大美女」</div>
   <div id="wrap">
     <canvas id="cv"></canvas>
     <div id="overlay">
@@ -92,12 +111,19 @@
     <button id="toggle">暂停</button>
     <button id="restart">重开</button>
   </div>
+  <div id="pad">
+    <button class="up"    data-dir="0,-1">▲</button>
+    <button class="left"  data-dir="-1,0">◀</button>
+    <button class="down"  data-dir="0,1">▼</button>
+    <button class="right" data-dir="1,0">▶</button>
+  </div>
 
 <script>
-  const TEXT = '徐杨是个大美女';
-  const CHARS = TEXT.split('');
-  const GOAL = 5;
-  const COLS = 15, ROWS = 20;
+  const HEAD_TEXT = '徐杨';
+  const FOOD_CHARS = '是个大美女'.split('');
+  const TEXT = HEAD_TEXT + FOOD_CHARS.join('');
+  const GOAL = FOOD_CHARS.length;
+  const COLS = 9, ROWS = 11;
 
   const cv = document.getElementById('cv');
   const ctx = cv.getContext('2d');
@@ -110,7 +136,7 @@
   let cell = 22;
   function fit() {
     const maxW = Math.min(window.innerWidth - 24, 420);
-    const maxH = window.innerHeight - 140;
+    const maxH = window.innerHeight - 260;
     cell = Math.max(12, Math.floor(Math.min(maxW / COLS, maxH / ROWS)));
     const dpr = window.devicePixelRatio || 1;
     cv.width = COLS * cell * dpr;
@@ -129,11 +155,11 @@
       for (let x = 0; x < COLS; x++)
         if (!snake.some(s => s.x === x && s.y === y)) free.push({ x, y });
     const spot = free[Math.floor(Math.random() * free.length)];
-    food = { ...spot, char: CHARS[score % CHARS.length] };
+    food = { ...spot, char: FOOD_CHARS[score] };
   }
 
   function reset() {
-    snake = [{ x: 7, y: 12 }, { x: 7, y: 13 }, { x: 7, y: 14 }];
+    snake = [{ x: 4, y: 6 }, { x: 4, y: 7 }];
     dir = { x: 0, y: -1 };
     nextDir = dir;
     score = 0;
@@ -190,29 +216,37 @@
       ctx.beginPath(); ctx.moveTo(0, y * cell); ctx.lineTo(w, y * cell); ctx.stroke();
     }
 
+    ctx.font = `700 ${Math.floor(cell * 0.72)}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
     if (food) {
-      ctx.font = `700 ${Math.floor(cell * 0.72)}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.save();
+      ctx.shadowColor = '#ffd166';
+      ctx.shadowBlur = cell * 0.4;
       ctx.fillStyle = '#ffd166';
       ctx.fillText(food.char, food.x * cell + cell / 2, food.y * cell + cell / 2 + 1);
+      ctx.restore();
     }
 
     snake.forEach((s, i) => {
-      const t = i / Math.max(1, snake.length - 1);
-      ctx.fillStyle = i === 0 ? '#ff5fa2' : `rgba(160,107,255,${0.95 - t * 0.45})`;
+      const cx = s.x * cell + cell / 2, cy = s.y * cell + cell / 2;
       const p = Math.max(1, Math.floor(cell * 0.08));
-      ctx.beginPath();
       const r = Math.floor(cell * 0.28);
+      ctx.fillStyle = i === 0 ? 'rgba(255,95,162,.35)' : 'rgba(160,107,255,.22)';
+      ctx.beginPath();
       const x = s.x * cell + p, y = s.y * cell + p, sz = cell - p * 2;
       ctx.roundRect ? ctx.roundRect(x, y, sz, sz, r) : ctx.rect(x, y, sz, sz);
       ctx.fill();
+
+      ctx.fillStyle = i === 0 ? '#ff5fa2' : '#ffffff';
+      ctx.fillText(TEXT[i] || '·', cx, cy + 1);
     });
   }
 
   function start() {
     if (timer || over) return;
-    timer = setInterval(step, 160);
+    timer = setInterval(step, 320);
     toggleBtn.textContent = '暂停';
   }
   function stop() {
@@ -248,6 +282,13 @@
     if (Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 1 : -1, 0);
     else turn(0, dy > 0 ? 1 : -1);
   }, { passive: true });
+
+  document.querySelectorAll('#pad button').forEach(btn => {
+    const [x, y] = btn.dataset.dir.split(',').map(Number);
+    const act = e => { e.preventDefault(); turn(x, y); };
+    btn.addEventListener('touchstart', act);
+    btn.addEventListener('click', act);
+  });
 
   toggleBtn.onclick = () => { if (!over) timer ? stop() : start(); };
   document.getElementById('restart').onclick = reset;
