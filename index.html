@@ -58,12 +58,14 @@
   }
   @keyframes flow { to { background-position: -300% 0; } }
   #sub { font-size: 14px; color: #cbb8d8; line-height: 1.6; }
-  #bar {
-    display: flex;
-    gap: 10px;
-    padding: 10px 14px 0;
-    width: 100%;
-    max-width: 420px;
+  #again {
+    flex: none;
+    width: auto;
+    min-width: 140px;
+    padding: 14px 30px;
+    font-size: 17px;
+    border-radius: 999px;
+    box-shadow: 0 6px 18px rgba(255,95,162,.35);
   }
   #pad {
     display: grid;
@@ -104,12 +106,8 @@
     <div id="overlay">
       <div id="title"></div>
       <div id="sub"></div>
-      <button id="again" style="max-width:180px">再来一局</button>
+      <button id="again">开始游戏</button>
     </div>
-  </div>
-  <div id="bar">
-    <button id="toggle">暂停</button>
-    <button id="restart">重开</button>
   </div>
   <div id="pad">
     <button class="up"    data-dir="0,-1">▲</button>
@@ -131,13 +129,12 @@
   const overlay = document.getElementById('overlay');
   const titleEl = document.getElementById('title');
   const subEl = document.getElementById('sub');
-  const toggleBtn = document.getElementById('toggle');
   const againBtn = document.getElementById('again');
 
   let cell = 22;
   function fit() {
     const maxW = Math.min(window.innerWidth - 24, 420);
-    const maxH = window.innerHeight - 260;
+    const maxH = window.innerHeight - 230;
     cell = Math.max(12, Math.floor(Math.min(maxW / COLS, maxH / ROWS)));
     const dpr = window.devicePixelRatio || 1;
     cv.width = COLS * cell * dpr;
@@ -176,7 +173,6 @@
     subEl.innerHTML = `吃齐「是个大美女」5 个字<br>集齐即胜利结算`;
     againBtn.textContent = '开始游戏';
     overlay.classList.add('show');
-    toggleBtn.textContent = '暂停';
     draw();
   }
 
@@ -204,7 +200,6 @@
   function finish(win) {
     over = true;
     stop();
-    toggleBtn.textContent = '暂停';
     titleEl.textContent = win ? TEXT : '撞到啦';
     subEl.innerHTML = win
       ? `集齐 ${GOAL} 个字，胜利结算！<br>${TEXT}！`
@@ -214,6 +209,7 @@
   }
 
   function draw() {
+    if (!snake) return;
     const w = COLS * cell, h = ROWS * cell;
     ctx.clearRect(0, 0, w, h);
 
@@ -257,12 +253,10 @@
   function start() {
     if (timer || over) return;
     timer = setInterval(step, 320);
-    toggleBtn.textContent = '暂停';
   }
   function stop() {
     clearInterval(timer);
     timer = null;
-    toggleBtn.textContent = '继续';
   }
 
   function turn(x, y) {
@@ -304,8 +298,6 @@
     btn.addEventListener('click', act);
   });
 
-  toggleBtn.onclick = () => { if (!over && !overlay.classList.contains('show')) timer ? stop() : start(); };
-  document.getElementById('restart').onclick = prepare;
   againBtn.onclick = () => {
     if (over) resetState();
     overlay.classList.remove('show');
